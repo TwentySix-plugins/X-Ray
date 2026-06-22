@@ -1,5 +1,5 @@
 {
-  "name": "twentysix/x-ray",
+  "name": "twentysixx/x-ray",
   "description": "A visual X-ray for Craft CMS Twig templates — hover any front-end element to see which template or component rendered it, and the variables it received.",
   "type": "craft-plugin",
   "license": "MIT",

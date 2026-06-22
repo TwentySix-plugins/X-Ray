@@ -19,7 +19,7 @@ From the **Plugin Store**: search for "X-Ray" in your control panel under **Plug
 With **Composer**:
 
 ```bash
-composer require twentysix/x-ray
+composer require twentysixx/x-ray
 php craft plugin/install x-ray
 ```
 
