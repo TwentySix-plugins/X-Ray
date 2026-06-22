@@ -4,6 +4,7 @@
 /.gitignore                  export-ignore
 /.github                     export-ignore
 /tests                       export-ignore
+/branding                    export-ignore
 /src/console/controllers/TestController.php   export-ignore
 /src/console/controllers/SetupController.php  export-ignore
 *.sh                         export-ignore
