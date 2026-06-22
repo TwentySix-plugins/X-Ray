@@ -48,9 +48,6 @@ class TestController extends Controller
         $this->testPropsContextFiltering();
         $this->testPropsTokenCache();
         $this->testPropsCompactJson();
-        $this->testNestedChainData();
-        $this->testCarsData();
-        $this->testAccordionData();
         $this->testApiSerializer();
         $this->testBundledCpAssets();
 
@@ -328,16 +325,15 @@ class TestController extends Controller
         $this->ok(($s['__type'] ?? null) === 'Element', 'top-level entry → __type Element');
         $this->ok(($s['id'] ?? null) === $entry->id, 'entry id serialized');
         $this->ok(!empty($s['editUrl']), 'entry editUrl present');
-        $this->ok(($s['section'] ?? null) === 'Games', 'entry section name present');
-        $this->ok(array_key_exists('status', $s), 'entry status present');
+        $this->ok(!empty($s['title']), 'entry title present');
+        $this->ok(!array_key_exists('fields', $s), 'entry fields are not expanded');
 
-        // Matrix collection
+        // Element collection summary
         $blocks = $entry->contentBlocks->all();
         $col = $this->sanitize($blocks);
-        $this->ok(($col['__type'] ?? null) === 'MatrixBlocks', 'array of blocks → MatrixBlocks');
-        $this->ok(($col['__count'] ?? 0) >= 1, 'MatrixBlocks count >= 1');
-        $this->ok(!empty($col['__items'][0]['blockType']), 'block items carry a blockType name');
-        $this->ok(($col['__items'][0]['__type'] ?? null) === 'MatrixBlock', 'nested block → __type MatrixBlock');
+        $this->ok(($col['__type'] ?? null) === 'ElementCollection', 'array of blocks → ElementCollection');
+        $this->ok(($col['__count'] ?? 0) >= 1, 'ElementCollection count >= 1');
+        $this->ok(!array_key_exists('__items', $col), 'collection items are not expanded');
     }
 
     // ─── Serializer: assets + thumbnails ─────────────────────────────────────
@@ -355,19 +351,12 @@ class TestController extends Controller
             return;
         }
 
-        // Must serialize without throwing (getThumbUrl() can fail for missing
-        // files; the serializer falls back to the asset URL).
+        // Must serialize without throwing.
         $s = $this->sanitize($asset);
         $this->ok(($s['__type'] ?? null) === 'Element', 'asset → __type Element');
-        $this->ok(($s['filename'] ?? null) === $asset->filename, 'asset filename serialized');
-        $this->ok(array_key_exists('kind', $s), 'asset kind present');
-
-        if ($asset->kind === 'image') {
-            // getThumbUrl() is used instead of an on-the-fly transform; just
-            // assert the key is produced (string URL or the fallback).
-            $this->ok(array_key_exists('thumbnailUrl', $s), 'image asset carries a thumbnailUrl');
-            $this->ok(is_string($s['thumbnailUrl']) || $s['thumbnailUrl'] === null, 'thumbnailUrl is a string/null (no exception)');
-        }
+        $this->ok(($s['id'] ?? null) === $asset->id, 'asset id serialized');
+        $this->ok(!empty($s['title']), 'asset title present');
+        $this->ok(!array_key_exists('thumbnailUrl', $s), 'asset thumbnail is not serialized');
     }
 
     // ─── Serializer: context filtering (getProps) ────────────────────────────
@@ -443,82 +432,6 @@ class TestController extends Controller
         $this->ok(($decoded['nested']['b'] ?? null) === 2, 'nested values survive compact encoding');
     }
 
-    // ─── Data: 5-level distinctly-named chain ────────────────────────────────
-
-    private function testNestedChainData(): void
-    {
-        $this->group('Data · 5-level chain (distinct names)');
-        $entry = Entry::find()->section('games')->slug('neon-void')->one();
-        if (!$entry) { $this->ok(false, 'Neon Void exists'); return; }
-
-        $col = $this->sanitize($entry->contentBlocks->all());
-        $continent = $this->findBlock($col['__items'] ?? [], 'Continent');
-        $this->ok($continent !== null, 'top-level Continent block present');
-        if (!$continent) return;
-
-        $names = $this->walkChain($continent);
-        $expected = ['Continent', 'Country', 'Region', 'Province', 'City'];
-        $this->ok($names === $expected, 'chain walks ' . implode('→', $expected) . ' (got ' . implode('→', $names) . ')');
-        $this->ok(count(array_unique($names)) === count($names), 'every nested level has a DISTINCT name');
-
-        // Leaf carries body text
-        $leaf = $continent;
-        for ($i = 0; $i < 4; $i++) {
-            $nested = $this->firstNestedCollection($leaf);
-            $leaf = $nested['__items'][0] ?? $leaf;
-        }
-        $body = implode(' ', array_map(fn($v) => is_string($v) ? $v : '', $leaf['fields'] ?? []));
-        $this->ok(str_contains($body, 'rock bottom'), 'leaf (City) holds the rock-bottom body text');
-    }
-
-    // ─── Data: Cars → Attributes → Details ───────────────────────────────────
-
-    private function testCarsData(): void
-    {
-        $this->group('Data · Cars → Attributes → Details');
-        $entry = Entry::find()->section('games')->slug('speed-kings-turbo')->one();
-        if (!$entry) { $this->ok(false, 'Speed Kings entry exists'); return; }
-
-        $col = $this->sanitize($entry->contentBlocks->all());
-        $car = $this->findBlock($col['__items'] ?? [], 'Car');
-        $this->ok($car !== null, 'a Car block is present');
-        if (!$car) return;
-
-        $specs = $this->firstNestedCollection($car);
-        $this->ok(($specs['__type'] ?? null) === 'MatrixBlocks', 'Car.carSpecs is a nested Matrix');
-        $attr = $specs['__items'][0] ?? null;
-        $this->ok(($attr['blockType'] ?? null) === 'Attribute', 'first spec is an Attribute block');
-
-        $details = $this->firstNestedCollection($attr ?? []);
-        $this->ok(($details['__type'] ?? null) === 'MatrixBlocks', 'Attribute.attributeDetails is a nested Matrix');
-        $detail = $details['__items'][0] ?? null;
-        $this->ok(($detail['blockType'] ?? null) === 'Detail', 'first detail is a Detail block');
-
-        $fields = $detail['fields'] ?? [];
-        $this->ok(array_key_exists('detailKey', $fields) && array_key_exists('detailValue', $fields), 'Detail has key + value fields');
-    }
-
-    // ─── Data: Accordion (3 levels) ──────────────────────────────────────────
-
-    private function testAccordionData(): void
-    {
-        $this->group('Data · Accordion → Panels → blocks');
-        $entry = Entry::find()->section('games')->slug('dragon-realms-vi')->one();
-        if (!$entry) { $this->ok(false, 'Dragon Realms VI exists'); return; }
-
-        $col = $this->sanitize($entry->contentBlocks->all());
-        $acc = $this->findBlock($col['__items'] ?? [], 'Accordion');
-        $this->ok($acc !== null, 'Accordion block present');
-        if (!$acc) return;
-
-        $panels = $this->firstNestedCollection($acc);
-        $this->ok(($panels['__type'] ?? null) === 'MatrixBlocks' && ($panels['__count'] ?? 0) >= 1, 'Accordion has nested Panels');
-        $panel = $panels['__items'][0] ?? null;
-        $this->ok(($panel['blockType'] ?? null) === 'Panel', 'first child is a Panel');
-        $content = $this->firstNestedCollection($panel ?? []);
-        $this->ok(($content['__type'] ?? null) === 'MatrixBlocks', 'Panel has nested content Matrix');
-    }
-
     // ─── API serializer ──────────────────────────────────────────────────────
 
     private function testApiSerializer(): void
@@ -536,10 +449,12 @@ class TestController extends Controller
         $entry = Entry::find()->section('games')->one();
         if ($entry) {
             $el = $m->invoke($api, $entry);
+            $this->ok(($el['__type'] ?? null) === 'Element', 'element serialized as summary');
             $this->ok(($el['id'] ?? null) === $entry->id, 'element serialized with id');
-            $this->ok(array_key_exists('title', $el) && array_key_exists('url', $el), 'element has title + url');
+            $this->ok(array_key_exists('title', $el) && array_key_exists('editUrl', $el), 'element has title + editUrl');
             $arr = $m->invoke($api, [$entry]);
-            $this->ok(is_array($arr) && ($arr['__items'][0]['id'] ?? null) === $entry->id, 'array of elements mapped');
+            $this->ok(is_array($arr) && ($arr['__type'] ?? null) === 'ElementCollection', 'array of elements → collection summary');
+            $this->ok(($arr['__count'] ?? 0) === 1, 'collection count matches array length');
         } else {
             $this->ok(false, 'a games entry exists for API test');
         }
@@ -709,43 +624,6 @@ class TestController extends Controller
         $m = new \ReflectionMethod($ext, 'sanitizeValue');
         $m->setAccessible(true);
         return $m->invoke($ext, $value, 0);
-    }
-
-    /** Find a serialized block by its blockType name. */
-    private function findBlock(array $items, string $typeName): ?array
-    {
-        foreach ($items as $it) {
-            if (is_array($it) && ($it['blockType'] ?? null) === $typeName) {
-                return $it;
-            }
-        }
-        return null;
-    }
-
-    /** Return the first nested MatrixBlocks/ElementCollection within a block's fields. */
-    private function firstNestedCollection(array $block): array
-    {
-        foreach ($block['fields'] ?? [] as $fv) {
-            if (is_array($fv) && in_array($fv['__type'] ?? null, ['MatrixBlocks', 'ElementCollection'], true)) {
-                return $fv;
-            }
-        }
-        return [];
-    }
-
-    /** Walk a chain following the first nested collection at each level; collect blockType names. */
-    private function walkChain(array $top): array
-    {
-        $names = [$top['blockType'] ?? '?'];
-        $node = $top;
-        while (true) {
-            $nested = $this->firstNestedCollection($node);
-            $child = $nested['__items'][0] ?? null;
-            if (!$child) break;
-            $names[] = $child['blockType'] ?? '?';
-            $node = $child;
-        }
-        return $names;
     }
 
     private function group(string $name): void

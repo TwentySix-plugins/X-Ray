@@ -21,9 +21,6 @@ class Extension extends AbstractExtension
     /** Max characters of raw markup kept for an HTML/rich-text field value. */
     public const HTML_PREVIEW_CAP = 10000;
 
-    /** Max items serialized (and fetched) from an element collection / Matrix. */
-    public const COLLECTION_DISPLAY_CAP = 12;
-
     public function getFunctions(): array
     {
         return [
@@ -106,31 +103,6 @@ class Extension extends AbstractExtension
             'CraftSolo', 'CraftPro', 'CraftTeam',
         ];
 
-        // Find the containing Entry edit URL to use for nested assets
-        $entryEditUrl = null;
-        foreach ($context as $key => $value) {
-            if (in_array($key, $skip, true)) {
-                continue;
-            }
-            if ($value instanceof \craft\elements\Entry) {
-                $entryEditUrl = $value->getCpEditUrl();
-                if ($entryEditUrl) {
-                    break;
-                }
-            }
-        }
-
-        if (!$entryEditUrl) {
-            try {
-                $matchedElement = Craft::$app->getUrlManager()->getMatchedElement();
-                if ($matchedElement instanceof \craft\elements\Entry) {
-                    $entryEditUrl = $matchedElement->getCpEditUrl();
-                }
-            } catch (\Throwable $e) {
-                // ignore
-            }
-        }
-
         $props = [];
         $types = [];   // parallel map: key → human-readable PHP type label
         foreach ($context as $key => $value) {
@@ -150,7 +122,7 @@ class Extension extends AbstractExtension
                 continue;
             }
             $types[$key] = $this->resolveTypeLabel($value);
-            $props[$key] = $this->sanitizeValue($value, 0, $entryEditUrl);
+            $props[$key] = $this->sanitizeValue($value, 0);
         }
 
         // Embed type metadata as a reserved key so the viewer can render badges.
@@ -223,7 +195,7 @@ class Extension extends AbstractExtension
     /**
      * Converts a Twig variable value to a JSON-safe representation.
      */
-    public function sanitizeValue(mixed $value, int $depth = 0, ?string $containerEditUrl = null): mixed
+    public function sanitizeValue(mixed $value, int $depth = 0): mixed
     {
         if ($depth > 24) {
             return '...';
@@ -237,60 +209,30 @@ class Extension extends AbstractExtension
             return mb_strlen($value) > 300 ? mb_substr($value, 0, 300) . '…' : $value;
         }
 
-        // ── ElementCollection (Craft 5 Matrix / relational field results) ──────
         if ($value instanceof \craft\elements\ElementCollection) {
-            return $this->sanitizeElementCollection($value, $depth, $containerEditUrl);
+            return $this->sanitizeElementCollectionSummary($value);
         }
 
         if (is_array($value)) {
-            // Check if it looks like an array of Elements (e.g. eager-loaded relations)
             $firstItem = reset($value);
             if ($firstItem instanceof \craft\base\ElementInterface && count($value) > 0) {
-                // Treat as a block collection
-                $collection = \craft\elements\ElementCollection::make($value);
-                return $this->sanitizeElementCollection($collection, $depth, $containerEditUrl);
+                return $this->sanitizeElementCollectionSummary(
+                    \craft\elements\ElementCollection::make($value)
+                );
             }
 
             $result = [];
             foreach (array_slice($value, 0, 20, true) as $k => $v) {
-                $result[$k] = $this->sanitizeValue($v, $depth + 1, $containerEditUrl);
+                $result[$k] = $this->sanitizeValue($v, $depth + 1);
             }
             return $result;
         }
 
-        // ── Craft elements: show their label and ID ────────────────────────────
         if ($value instanceof \craft\base\ElementInterface) {
-            return $this->sanitizeElement($value, $depth, $containerEditUrl);
+            return $this->sanitizeElementSummary($value);
         }
 
-        // Craft element queries
         if ($value instanceof \craft\elements\db\ElementQuery) {
-            // Nested-element queries (Matrix / nested entries) carry a fieldId —
-            // expand those into their blocks. Plain relational queries stay a
-            // lightweight summary so we never execute an unbounded relation.
-            $fieldId = property_exists($value, 'fieldId') ? $value->fieldId : null;
-            if (!empty($fieldId)) {
-                try {
-                    // Bound the work: count once, then fetch only what we display
-                    // instead of materialising every nested block via ->all().
-                    $total = (clone $value)->count();
-                    $items = (clone $value)->limit(self::COLLECTION_DISPLAY_CAP)->all();
-                    return $this->sanitizeElementCollection(
-                        \craft\elements\ElementCollection::make($items),
-                        $depth,
-                        $containerEditUrl,
-                        (int)$total
-                    );
-                } catch (\Throwable $e) {
-                    // Fall back to the simple (unbounded) path if the query can't
-                    // be cloned/counted for some reason.
-                    return $this->sanitizeElementCollection(
-                        \craft\elements\ElementCollection::make($value->all()),
-                        $depth,
-                        $containerEditUrl
-                    );
-                }
-            }
             return ['__type' => 'ElementQuery', 'class' => get_class($value)];
         }
 
@@ -377,154 +319,27 @@ class Extension extends AbstractExtension
     }
 
     /**
-     * Serialize a single Craft element to a JSON-safe array.
+     * Lightweight summary for a single Craft element (shown inline in Props).
      */
-    private function sanitizeElement(\craft\base\ElementInterface $value, int $depth = 0, ?string $containerEditUrl = null): array
+    private function sanitizeElementSummary(\craft\base\ElementInterface $value): array
     {
-        $isMatrixBlock = $this->isMatrixEntry($value);
-        $editUrl = ($value instanceof \craft\elements\Asset && $containerEditUrl) ? $containerEditUrl : $value->getCpEditUrl();
-
-        $data = [
-            '__type'    => $isMatrixBlock ? 'MatrixBlock' : 'Element',
+        return [
+            '__type'    => 'Element',
             '__element' => get_class($value),
             'id'        => $value->id,
             'title'     => method_exists($value, '__toString') ? (string)$value : ('Element #' . $value->id),
-            'url'       => $value->url,
-            'editUrl'   => $editUrl,
-            'status'    => $value->status,
+            'editUrl'   => $value->getCpEditUrl(),
         ];
-
-        // Site info
-        if ($site = $value->getSite()) {
-            $data['site'] = $site->name;
-        }
-
-        // Entry details (includes Matrix nested entries in Craft 5)
-        if ($value instanceof \craft\elements\Entry) {
-            if ($section = $value->getSection()) {
-                $data['section'] = $section->name;
-            }
-            if ($type = $value->getType()) {
-                $data['blockType'] = $type->name;
-                $data['blockTypeHandle'] = $type->handle;
-            }
-
-            // Serialize block field values. Recurses through nested Matrix
-            // blocks (Matrix → Matrix → Matrix); the $depth guard above caps it.
-            if ($depth < 22) {
-                $data['fields'] = $this->serializeEntryFields($value, $depth + 1, $editUrl);
-            }
-        }
-
-        // Asset details
-        if ($value instanceof \craft\elements\Asset) {
-            if ($volume = $value->getVolume()) {
-                $data['volume'] = $volume->name;
-            }
-            $data['filename'] = $value->filename;
-            $data['kind']     = $value->kind;
-            $data['mimeType'] = $value->mimeType;
-            $data['width']    = $value->width;
-            $data['height']   = $value->height;
-            // Provide a small thumbnail URL for image assets so the X-Ray panel
-            // can render an inline preview without fetching the original file.
-            // getThumbUrl() returns Craft's CP-served thumbnail (generated lazily
-            // and cached by the control panel) rather than materialising a public
-            // image transform on disk during serialization — much cheaper, and the
-            // viewer runs inside the CP so it can load it.
-            if ($value->kind === 'image') {
-                try {
-                    $data['thumbnailUrl'] = $value->getThumbUrl(120) ?? $value->url;
-                } catch (\Throwable $e) {
-                    $data['thumbnailUrl'] = $value->url;
-                }
-            }
-        }
-
-        // Category details
-        if ($value instanceof \craft\elements\Category) {
-            if ($group = $value->getGroup()) {
-                $data['categoryGroup'] = $group->name;
-            }
-        }
-
-        // User details
-        if ($value instanceof \craft\elements\User) {
-            $data['username'] = $value->username;
-        }
-
-        return $data;
     }
 
     /**
-     * Serialize an ElementCollection as a MatrixBlocks prop.
+     * Lightweight summary for an element collection (shown inline in Props).
      */
-    private function sanitizeElementCollection(\craft\elements\ElementCollection $collection, int $depth = 0, ?string $containerEditUrl = null, ?int $knownTotal = null): array
+    private function sanitizeElementCollectionSummary(\craft\elements\ElementCollection $collection): array
     {
-        $items = $collection->all();
-        // When the caller already counted the full set (e.g. it pre-limited a
-        // query for performance), trust that total; otherwise count what we have.
-        $count = $knownTotal ?? count($items);
-
-        // Determine if this looks like a Matrix/block field (entries with a fieldId)
-        $isMatrix = false;
-        foreach ($items as $item) {
-            if ($item instanceof \craft\elements\Entry && $this->isMatrixEntry($item)) {
-                $isMatrix = true;
-                break;
-            }
-        }
-
-        $serializedItems = [];
-        foreach (array_slice($items, 0, self::COLLECTION_DISPLAY_CAP) as $item) {
-            $serializedItems[] = $this->sanitizeValue($item, $depth + 1, $containerEditUrl);
-        }
-
         return [
-            '__type'   => $isMatrix ? 'MatrixBlocks' : 'ElementCollection',
-            '__count'  => $count,
-            '__items'  => $serializedItems,
+            '__type'  => 'ElementCollection',
+            '__count' => $collection->count(),
         ];
-    }
-
-    /**
-     * Detect if an Entry is a nested/Matrix block entry (Craft 5 style).
-     * Matrix block entries have a `fieldId` set (they belong to a Matrix field).
-     */
-    private function isMatrixEntry(\craft\base\ElementInterface $entry): bool
-    {
-        if (!($entry instanceof \craft\elements\Entry)) {
-            return false;
-        }
-        // In Craft 5, nested entries (Matrix blocks) have a non-null fieldId
-        return !empty($entry->fieldId);
-    }
-
-    /**
-     * Serialize the custom field values of an Entry (for Matrix block display).
-     * Only goes one level deep to avoid circular references.
-     */
-    private function serializeEntryFields(\craft\elements\Entry $entry, int $depth = 0, ?string $containerEditUrl = null): array
-    {
-        $result = [];
-        try {
-            $fieldLayout = $entry->getFieldLayout();
-            if (!$fieldLayout) {
-                return $result;
-            }
-
-            foreach ($fieldLayout->getCustomFields() as $field) {
-                $handle = $field->handle;
-                try {
-                    $raw = $entry->getFieldValue($handle);
-                    $result[$handle] = $this->sanitizeValue($raw, $depth, $containerEditUrl);
-                } catch (\Throwable $e) {
-                    $result[$handle] = '[error]';
-                }
-            }
-        } catch (\Throwable $e) {
-            // silently skip
-        }
-        return $result;
     }
 }
