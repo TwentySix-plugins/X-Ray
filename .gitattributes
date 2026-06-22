@@ -1,0 +1,10 @@
+# Keep the distributed package lean: dev-only tooling and tests are kept in the
+# repo but excluded from the Composer dist tarball users actually install.
+/.gitattributes              export-ignore
+/.gitignore                  export-ignore
+/.github                     export-ignore
+/tests                       export-ignore
+/src/console/controllers/TestController.php   export-ignore
+/src/console/controllers/SetupController.php  export-ignore
+*.sh                         export-ignore
+.DS_Store                    export-ignore

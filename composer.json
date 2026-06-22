@@ -1,0 +1,49 @@
+{
+  "name": "twentysix/x-ray",
+  "description": "A visual X-ray for Craft CMS Twig templates — hover any front-end element to see which template or component rendered it, and the variables it received.",
+  "type": "craft-plugin",
+  "license": "MIT",
+  "keywords": [
+    "craft",
+    "craftcms",
+    "craft-plugin",
+    "twig",
+    "templates",
+    "components",
+    "debug",
+    "developer-tools",
+    "inspector"
+  ],
+  "homepage": "https://twentysix.dev",
+  "support": {
+    "email": "support@twentysix.dev",
+    "issues": "https://github.com/twentysix/craft-x-ray/issues",
+    "source": "https://github.com/twentysix/craft-x-ray",
+    "docs": "https://github.com/twentysix/craft-x-ray/blob/main/README.md"
+  },
+  "require": {
+    "php": ">=8.2",
+    "craftcms/cms": "^5.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "twentysix\\xray\\": "src/"
+    }
+  },
+  "extra": {
+    "handle": "x-ray",
+    "name": "X-Ray",
+    "developer": "TwentySix",
+    "developerUrl": "https://twentysix.dev",
+    "documentationUrl": "https://github.com/twentysix/craft-x-ray/blob/main/README.md",
+    "changelogUrl": "https://raw.githubusercontent.com/twentysix/craft-x-ray/main/CHANGELOG.md",
+    "description": "A visual X-ray for Craft CMS Twig templates — hover any front-end element to see which template or component rendered it, and the variables it received.",
+    "class": "twentysix\\xray\\Plugin"
+  },
+  "config": {
+    "allow-plugins": {
+      "craftcms/plugin-installer": true
+    },
+    "sort-packages": true
+  }
+}

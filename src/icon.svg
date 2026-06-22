@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <!-- Sleek black background badge -->
+  <rect width="100" height="100" rx="22" fill="#0F0F14" />
+
+  <!-- Dotted border outline -->
+  <rect x="14" y="14" width="72" height="72" rx="14" stroke="#FFFFFF" stroke-width="5" stroke-dasharray="0 10.5" stroke-linecap="round" fill="none" />
+
+  <!-- Plus icon in the middle -->
+  <path d="M 38 50 h 24 M 50 38 v 24" stroke="#FFFFFF" stroke-width="6.5" stroke-linecap="round" />
+</svg>

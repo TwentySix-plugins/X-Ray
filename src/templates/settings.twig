@@ -1,0 +1,294 @@
+{% import "_includes/forms" as forms %}
+
+{# ── What X-Ray is currently pointed at ───────────────────────── #}
+<div class="xr-settings-panel" style="
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  border: 1px solid var(--hairline-color);
+  border-radius: 8px;
+  background: var(--gray-050, #f7f7f8);
+">
+  <h2 style="margin: 0 0 4px;">Currently inspecting</h2>
+  <p class="light" style="margin: 0 0 12px;">
+    The URL the viewer loads when you open X-Ray.
+  </p>
+  <a href="{{ effectiveUrl }}" target="_blank" rel="noopener" style="
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    font-size: 13px; font-weight: 600; color: var(--link-color);
+    text-decoration: none;
+  ">
+    {{ effectiveUrl }}
+    <span data-icon="external" aria-hidden="true"></span>
+  </a>
+
+  {% if settings.startUrl|trim is empty %}
+    <p class="light" style="margin: 10px 0 0; font-size: 12px;">
+      Resolved from the current site’s base URL (no override set).
+    </p>
+  {% else %}
+    <p class="light" style="margin: 10px 0 0; font-size: 12px;">
+      Using your custom <strong>Start URL</strong> below.
+    </p>
+  {% endif %}
+</div>
+
+{# ── Configurable start URL ───────────────────────────────────────────── #}
+{{ forms.autosuggestField({
+  label: 'Start URL'|t('x-ray'),
+  instructions: 'Where X-Ray should start. Leave blank to use the current site’s base URL.'|t('x-ray'),
+  id: 'startUrl',
+  name: 'startUrl',
+  value: settings.startUrl,
+  placeholder: effectiveUrl,
+  suggestEnvVars: true,
+}) }}
+
+{# ── Activation ───────────────────────────────────────────────────────── #}
+<hr>
+<h2>Activation</h2>
+
+{{ forms.textField({
+  label: 'Activation parameter'|t('x-ray'),
+  instructions: 'The query-string flag that turns X-Ray on for a front-end request (e.g. `?xray=1`). Letters, numbers, `-` and `_` only.'|t('x-ray'),
+  id: 'activationParam',
+  name: 'activationParam',
+  value: settings.activationParam,
+  placeholder: 'xray',
+  errors: settings.getErrors('activationParam'),
+}) }}
+
+{{ forms.selectField({
+  label: 'Enable in'|t('x-ray'),
+  instructions: 'Restrict where X-Ray is allowed to activate.'|t('x-ray'),
+  id: 'activeMode',
+  name: 'activeMode',
+  value: settings.activeMode,
+  options: [
+    { label: 'All environments'|t('x-ray'),       value: 'always' },
+    { label: 'Dev Mode only'|t('x-ray'),          value: 'devMode' },
+    { label: 'Specific environments…'|t('x-ray'), value: 'environments' },
+  ],
+}) }}
+
+{{ forms.textareaField({
+  label: 'Allowed environments'|t('x-ray'),
+  instructions: 'One environment name per line (matches `CRAFT_ENVIRONMENT`). Only used when “Specific environments” is selected. Empty = allow all.'|t('x-ray'),
+  id: 'environments',
+  name: 'environments',
+  value: settings.environments,
+  rows: 3,
+  placeholder: "dev\nstaging",
+}) }}
+
+{# ── Template wrapping ────────────────────────────────────────────────── #}
+<hr>
+<h2>Template wrapping</h2>
+<p class="light">Controls which templates get annotated so X-Ray can identify them. Glob patterns match the full template path (e.g. <code>_components/*</code>).</p>
+
+{{ forms.textField({
+  label: 'Filename prefix'|t('x-ray'),
+  instructions: 'A partial’s filename must start with this to be wrapped. Leave blank to wrap all templates (subject to the patterns below). Default `_`.'|t('x-ray'),
+  id: 'wrapPrefix',
+  name: 'wrapPrefix',
+  value: settings.wrapPrefix,
+  placeholder: '_',
+}) }}
+
+{{ forms.textareaField({
+  label: 'Include patterns'|t('x-ray'),
+  instructions: 'Optional glob patterns (one per line). When set, only matching templates are wrapped — this overrides the prefix rule.'|t('x-ray'),
+  id: 'includePatterns',
+  name: 'includePatterns',
+  value: settings.includePatterns,
+  rows: 3,
+  placeholder: "_components/*\nblocks/*",
+}) }}
+
+{{ forms.textareaField({
+  label: 'Exclude patterns'|t('x-ray'),
+  instructions: 'Glob patterns (one per line) that are never wrapped — these win over everything else.'|t('x-ray'),
+  id: 'excludePatterns',
+  name: 'excludePatterns',
+  value: settings.excludePatterns,
+  rows: 3,
+  placeholder: "_components/_icon-*\nemail/*",
+}) }}
+
+{# ── Behaviour ────────────────────────────────────────────────────────── #}
+<hr>
+<h2>Behaviour</h2>
+
+{{ forms.lightswitchField({
+  label: 'Show edit links'|t('x-ray'),
+  instructions: 'Show “Edit in Admin” links and buttons in the sidebar.'|t('x-ray'),
+  id: 'showEditLinks',
+  name: 'showEditLinks',
+  on: settings.showEditLinks,
+}) }}
+
+{{ forms.lightswitchField({
+  label: 'Show tooltip'|t('x-ray'),
+  instructions: 'Show the floating component label beside the cursor while inspecting.'|t('x-ray'),
+  id: 'showTooltip',
+  name: 'showTooltip',
+  on: settings.showTooltip,
+}) }}
+
+{{ forms.selectField({
+  label: 'Tooltip label'|t('x-ray'),
+  instructions: 'What the floating tooltip shows for each component.'|t('x-ray'),
+  id: 'tooltipLabel',
+  name: 'tooltipLabel',
+  value: settings.tooltipLabel,
+  options: [
+    { label: 'Component name'|t('x-ray'),     value: 'name' },
+    { label: 'Full template path'|t('x-ray'), value: 'path' },
+  ],
+}) }}
+
+{{ forms.lightswitchField({
+  label: 'Persist selection highlight'|t('x-ray'),
+  instructions: 'Keep a solid outline on the component you click, separate from the hover highlight.'|t('x-ray'),
+  id: 'persistSelection',
+  name: 'persistSelection',
+  on: settings.persistSelection,
+}) }}
+
+{{ forms.lightswitchField({
+  label: 'Block external navigation'|t('x-ray'),
+  instructions: 'Keep the viewer on this project’s host — external links are blocked instead of loading in the iframe.'|t('x-ray'),
+  id: 'blockExternalNav',
+  name: 'blockExternalNav',
+  on: settings.blockExternalNav,
+}) }}
+
+{# ── Open in editor ───────────────────────────────────────────────────── #}
+<hr>
+<h2>Open in editor</h2>
+<p class="light">Click the editor icon next to a template path in the sidebar to open that file directly in your code editor.</p>
+
+{{ forms.selectField({
+  label: 'Editor mode'|t('x-ray'),
+  instructions: 'How the editor icon behaves. **Default** fires immediately in the chosen editor below. **Variable** pops up an inline picker so you can choose an editor on the spot.'|t('x-ray'),
+  id: 'editorMode',
+  name: 'editorMode',
+  value: settings.editorMode,
+  options: [
+    { label: 'Default — open in a single configured editor'|t('x-ray'), value: 'default' },
+    { label: 'Variable — pick an editor each time'|t('x-ray'),          value: 'variable' },
+  ],
+}) }}
+
+{{ forms.selectField({
+  label: 'Default editor'|t('x-ray'),
+  instructions: 'The editor that opens when **Editor mode** is set to *Default* (also the pre-selected option in the *Variable* picker).'|t('x-ray'),
+  id: 'defaultEditor',
+  name: 'defaultEditor',
+  value: settings.defaultEditor,
+  options: [
+    { label: 'VS Code',          value: 'vscode' },
+    { label: 'Cursor',           value: 'cursor' },
+    { label: 'Windsurf',         value: 'windsurf' },
+    { label: 'PHPStorm',         value: 'phpstorm' },
+    { label: 'WebStorm',         value: 'webstorm' },
+    { label: 'IntelliJ IDEA',    value: 'idea' },
+    { label: 'Zed',              value: 'zed' },
+    { label: 'Sublime Text',     value: 'sublime' },
+    { label: 'Nova',             value: 'nova' },
+  ],
+}) }}
+
+{{ forms.textField({
+  label: 'Local project path'|t('x-ray'),
+  instructions: 'If Craft is running in Docker, DDEV, or a VM, the paths the editor uses won’t match your computer. Enter your local project path here to map them correctly (e.g. `/Users/name/Sites/project`).'|t('x-ray'),
+  id: 'localBasePath',
+  name: 'localBasePath',
+  value: settings.localBasePath,
+  placeholder: '/Users/name/Sites/project',
+}) }}
+
+{# ── Highlight appearance ─────────────────────────────────────────────── #}
+<hr>
+<h2>Highlight appearance</h2>
+
+{{ forms.colorField({
+  label: 'Accent colour'|t('x-ray'),
+  instructions: 'Colour of the hover highlight, tooltip and sidebar accent.'|t('x-ray'),
+  id: 'accentColor',
+  name: 'accentColor',
+  value: settings.accentColor,
+}) }}
+
+{{ forms.selectField({
+  label: 'Highlight style'|t('x-ray'),
+  instructions: 'Outline style drawn around the hovered component in the page.'|t('x-ray'),
+  id: 'highlightStyle',
+  name: 'highlightStyle',
+  value: settings.highlightStyle,
+  options: [
+    { label: 'Dotted'|t('x-ray'), value: 'dotted' },
+    { label: 'Dashed'|t('x-ray'), value: 'dashed' },
+    { label: 'Solid'|t('x-ray'),  value: 'solid' },
+  ],
+}) }}
+
+{# ── Reference: every site's base URL ─────────────────────────────────── #}
+<hr>
+<h2>Site base URLs</h2>
+<p class="light">For reference — the base URL of each site in this Craft install.</p>
+<table class="data fullwidth">
+  <thead>
+    <tr>
+      <th>Site</th>
+      <th>Base URL</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for site in sites %}
+      <tr>
+        <td>
+          {{ site.name }}
+          {% if site.primary %}<span class="status green" title="Primary site"></span>{% endif %}
+        </td>
+        <td>
+          <code>{{ site.baseUrl }}</code>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+(function () {
+  // Editor mode sync
+  const modeEl   = document.querySelector('[id$="editorMode"]') || document.getElementById('editorMode');
+  const editorEl = document.querySelector('[id$="defaultEditor"]') || document.getElementById('defaultEditor');
+  if (modeEl && editorEl) {
+    function sync() {
+      const isVariable = modeEl.value === 'variable';
+      editorEl.disabled = isVariable;
+      // Walk up to the Craft field wrapper so the label also dims.
+      const field = editorEl.closest('.field') || editorEl.parentElement;
+      if (field) field.style.opacity = isVariable ? '0.45' : '';
+    }
+    modeEl.addEventListener('change', sync);
+    sync();
+  }
+
+  // Active mode / environments sync
+  const activeModeEl   = document.querySelector('[id$="activeMode"]') || document.getElementById('activeMode');
+  const environmentsEl = document.querySelector('[id$="environments"]') || document.getElementById('environments');
+  if (activeModeEl && environmentsEl) {
+    function syncActiveMode() {
+      const isSpecific = activeModeEl.value === 'environments';
+      const field = environmentsEl.closest('.field') || environmentsEl.parentElement;
+      if (field) {
+        field.style.display = isSpecific ? '' : 'none';
+      }
+    }
+    activeModeEl.addEventListener('change', syncActiveMode);
+    syncActiveMode();
+  }
+})();
+</script>
