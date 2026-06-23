@@ -2,6 +2,7 @@
 
 namespace twentysix\xray\twig;
 
+use Craft;
 use twentysix\xray\models\Settings;
 use Twig\Loader\LoaderInterface;
 use Twig\Source;
@@ -29,11 +30,19 @@ class XRayTwigLoader implements LoaderInterface
 
         if ($this->shouldWrap($name, $code)) {
             $escaped = json_encode($name, JSON_UNESCAPED_SLASHES);
+            // Emit the template's *real* path (relative to the templates root) so
+            // the viewer can show/open the actual file instead of reconstructing a
+            // guess from the logical name. Static per template, so it's safe to bake
+            // into the compiled (cached) output.
+            $rel = $this->relativeTemplatePath($source->getPath());
+            $fileAttr = $rel !== null
+                ? ' data-craft-file={{ ' . json_encode($rel, JSON_UNESCAPED_SLASHES) . "|e('html_attr') }}"
+                : '';
             // Emit only a short token (data-craft-id); the viewer fetches the
             // full props on demand. Keeps the HTML payload tiny even on pages
             // with many components and deeply-nested data.
             $wrapped = <<<TWIG
-{% if xrayActive() %}<div data-craft-component={{ {$escaped}|e('html_attr') }} data-craft-id="{{ xrayPropsToken(_context)|e('html_attr') }}" style="display:contents;">{% endif %}
+{% if xrayActive() %}<div data-craft-component={{ {$escaped}|e('html_attr') }}{$fileAttr} data-craft-id="{{ xrayPropsToken(_context)|e('html_attr') }}" style="display:contents;">{% endif %}
 {$code}
 {% if xrayActive() %}</div>{% endif %}
 TWIG;
@@ -71,6 +80,25 @@ TWIG;
             $this->suffix = '|xray:' . substr(sha1($sig), 0, 10);
         }
         return $this->suffix;
+    }
+
+    /**
+     * The template's real path, relative to the site templates root
+     * (e.g. "parts/region/node.twig"). Returns null when the resolved path
+     * is empty or lives outside the templates root, so the viewer can fall
+     * back to its best-effort guess.
+     */
+    private function relativeTemplatePath(?string $path): ?string
+    {
+        if ($path === null || $path === '') {
+            return null;
+        }
+        $path = str_replace('\\', '/', $path);
+        $root = str_replace('\\', '/', rtrim(Craft::$app->getPath()->getSiteTemplatesPath(), '/\\')) . '/';
+        if (str_starts_with($path, $root)) {
+            return substr($path, strlen($root));
+        }
+        return null;
     }
 
     public function isFresh(string $name, int $time): bool

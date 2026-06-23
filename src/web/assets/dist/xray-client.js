@@ -142,6 +142,8 @@
         // Carry only the lightweight token — the viewer fetches props on demand.
         chain.push({
           component: name,
+          // Real template path (relative to templates root) emitted by the loader.
+          file: node.dataset.craftFile || null,
           id: node.dataset.craftId || null,
           // How many times THIS template appears on the page (>= 1).
           count: counts[name] || 1,

@@ -1188,8 +1188,12 @@
 
   function basename(p) { return p ? p.split('/').pop() : p; }
 
-  // Twig partials resolve under templates/ — show a path you can search for.
-  function filePath(component) { return 'templates/' + component + '.twig'; }
+  // Real path the loader emitted (relative to templates root), shown under
+  // templates/. Falls back to a name-based guess only for older payloads that
+  // didn't carry the real path.
+  function filePath(component, file) {
+    return 'templates/' + (file || (component + '.twig'));
+  }
 
   // Badge: how many times this template was rendered on the current page.
   function renderCountBadge(count) {
@@ -1281,10 +1285,10 @@
   // Build the deep-link URL for a given editor key + component token.
   // Uses CONFIG.templatesPath (absolute) so the editor can locate the file.
   // e.g. /Users/thereza/Desktop/craftcms-project/templates/_components/_card.twig
-  function editorUrl(editorKey, component) {
+  function editorUrl(editorKey, component, file) {
     const editor = EDITORS[editorKey];
     if (!editor) return null;
-    const absPath = CONFIG.templatesPath + '/' + component + '.twig';
+    const absPath = CONFIG.templatesPath + '/' + (file || (component + '.twig'));
     return editor.url(absPath);
   }
 
@@ -1300,22 +1304,23 @@
   }, true);
 
   // Build the editor button HTML (and its picker for Variable mode).
-  function editorBtnHtml(component) {
+  function editorBtnHtml(component, file) {
     const ICON_EDITOR = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
     const LABEL = `<span>Code</span>`;
+    const fileAttr = file ? ` data-file="${esc(file)}"` : '';
 
     if (CONFIG.editorMode === 'default') {
       // Fire immediately on click — no picker needed.
       const editor = EDITORS[CONFIG.defaultEditor] || EDITORS['vscode'];
       return `<span class="xr-editor-btn-wrap" style="position:relative;display:inline-flex;">
-        <button class="xr-editor-btn" title="Open in ${esc(editor.label)}" data-editor-fire data-component="${esc(component)}">${ICON_EDITOR}${LABEL}</button>
+        <button class="xr-editor-btn" title="Open in ${esc(editor.label)}" data-editor-fire data-component="${esc(component)}"${fileAttr}>${ICON_EDITOR}${LABEL}</button>
       </span>`;
     }
 
     // Variable mode: show a picker with all editors.
     const opts = Object.entries(EDITORS).map(([key, ed]) => {
       const isDefault = key === CONFIG.defaultEditor;
-      return `<button class="xr-editor-opt${isDefault ? ' active' : ''}" data-editor-pick data-key="${esc(key)}" data-component="${esc(component)}">
+      return `<button class="xr-editor-opt${isDefault ? ' active' : ''}" data-editor-pick data-key="${esc(key)}" data-component="${esc(component)}"${fileAttr}>
         <img src="${esc(ed.icon)}" alt="${esc(ed.label)}" loading="lazy">
         <span class="xr-editor-opt-name">${esc(ed.label)}</span>
         ${isDefault ? '<span class="xr-editor-opt-check">✓</span>' : ''}
@@ -1337,7 +1342,7 @@
     root.querySelectorAll('[data-editor-fire]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const url = editorUrl(CONFIG.defaultEditor, btn.dataset.component);
+        const url = editorUrl(CONFIG.defaultEditor, btn.dataset.component, btn.dataset.file);
         if (url) window.location.href = url;
       });
     });
@@ -1358,7 +1363,7 @@
     root.querySelectorAll('[data-editor-pick]').forEach(opt => {
       opt.addEventListener('click', (e) => {
         e.stopPropagation();
-        const url = editorUrl(opt.dataset.key, opt.dataset.component);
+        const url = editorUrl(opt.dataset.key, opt.dataset.component, opt.dataset.file);
         closeActivePicker();
         if (url) window.location.href = url;
       });
@@ -1366,8 +1371,8 @@
   }
 
   // Render the file path as a nested folder/file tree.
-  function locationTree(component) {
-    const segs = filePath(component).split('/');
+  function locationTree(component, file) {
+    const segs = filePath(component, file).split('/');
     return '<div class="xr-loc">' + segs.map((seg, i) => {
       const isFile = i === segs.length - 1;
       return `<div class="xr-loc-row ${isFile ? 'xr-loc-file' : 'xr-loc-folder'}" style="padding-left:${i * 16}px">
@@ -1429,7 +1434,7 @@
     emptyEl.style.display = 'none';
 
     const sel       = lastChain[lastIdx] || lastChain[0];
-    const path      = filePath(sel.component);
+    const path      = filePath(sel.component, sel.file);
     const props     = resolveProps(sel);          // null while still loading
     const ready     = props !== null;
     const propCount = ready
@@ -1483,13 +1488,13 @@
       <section class="xr-sec">
         <div class="xr-sec-hd">Location
           <div style="display:flex;align-items:center;gap:5px;margin-left:auto;">
-            ${editorBtnHtml(sel.component)}
+            ${editorBtnHtml(sel.component, sel.file)}
             <button class="xr-copy" data-copy="${esc(path)}" title="Copy path">
               <span class="xr-copy-ic" aria-hidden="true">⧉</span><span>Copy</span>
             </button>
           </div>
         </div>
-        ${locationTree(sel.component)}
+        ${locationTree(sel.component, sel.file)}
       </section>
 
       ${hierarchy}

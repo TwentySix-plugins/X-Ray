@@ -1,5 +1,10 @@
 # Release Notes for X-Ray
 
+## 1.0.2 - 2026-06-23
+
+### Fixed
+- Location breadcrumb and "Open in editor" now use each template's real path (relative to the templates root) instead of guessing `templates/{name}.twig`, fixing doubled extensions (e.g. `node.twig.twig`) and wrong paths for nested partials.
+
 ## 1.0.1 - 2026-06-22
 
 ### Removed
